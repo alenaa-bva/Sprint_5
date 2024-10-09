@@ -1,0 +1,6 @@
+# Игнорировать файлы и директории
+.idea/
+.build/
+.target/
+# Project exclude paths
+/.venv/

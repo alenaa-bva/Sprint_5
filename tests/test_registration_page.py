@@ -1,7 +1,35 @@
 import pytest
+from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.support.wait import WebDriverWait
+
+from data import LoginData
+from helpers import generate_login
 from locators import RegistrationPageLocators, LoginPageLocators, HomePageLocators
 
 
+# вспомогательные функции
+def wait_element_to_be_clickable(driver, locator, timeout=5):
+    return WebDriverWait(driver, timeout).until(expected_conditions.element_to_be_clickable(locator))
+
+def wait_element_to_be_visible(driver, locator, timeout=5):
+    return WebDriverWait(driver, timeout).until(expected_conditions.visibility_of_element_located(locator))
+
+def register_user(driver, name, login, password):
+    driver.get("https://stellarburgers.nomoreparties.site/register")
+
+    wait_element_to_be_visible(driver,RegistrationPageLocators.rp_password_input)
+
+    driver.find_element(*RegistrationPageLocators.rp_name_input).send_keys(name)
+    driver.find_element(*RegistrationPageLocators.rp_email_input).send_keys(login)
+    driver.find_element(*RegistrationPageLocators.rp_password_input).send_keys(password)
+    driver.find_element(*RegistrationPageLocators.sign_up_button).click()
+
+    wait_element_to_be_visible(driver, LoginPageLocators.login_header)
+
+    return register_user
+
+
+#тесты
 class TestRegistration:
 
     @pytest.mark.parametrize("name, password", [
@@ -11,10 +39,6 @@ class TestRegistration:
     def test_registration_success(
             self,
             driver,
-            register_user,
-            wait_element_to_be_visible,
-            wait_element_to_be_clickable,
-            generate_login,
             name,
             password
     ):
@@ -23,69 +47,48 @@ class TestRegistration:
         # регистрация
         driver.get("https://stellarburgers.nomoreparties.site")
 
-        wait_element_to_be_clickable(HomePageLocators.go_to_account_button)
+        wait_element_to_be_clickable(driver, HomePageLocators.go_to_account_button).click()
 
-        driver.find_element(*HomePageLocators.go_to_account_button).click()
+        wait_element_to_be_clickable(driver, LoginPageLocators.registration_link).click()
 
-        wait_element_to_be_clickable(LoginPageLocators.registration_link)
-
-        driver.find_element(*LoginPageLocators.registration_link).click()
-
-        wait_element_to_be_visible(RegistrationPageLocators.rp_password_input)
+        wait_element_to_be_visible(driver, RegistrationPageLocators.rp_password_input)
 
         driver.find_element(*RegistrationPageLocators.rp_name_input).send_keys(name)
         driver.find_element(*RegistrationPageLocators.rp_email_input).send_keys(login)
         driver.find_element(*RegistrationPageLocators.rp_password_input).send_keys(password)
         driver.find_element(*RegistrationPageLocators.sign_up_button).click()
 
-        wait_element_to_be_visible(LoginPageLocators.login_header)
+        wait_element_to_be_visible(driver, LoginPageLocators.login_header)
 
         assert driver.current_url == 'https://stellarburgers.nomoreparties.site/login', "Регистрация не прошла"
 
         # проверка, что пользователь действительно создан
-        driver.get("https://stellarburgers.nomoreparties.site/login")
 
         # логин с созданным пользователем
         driver.find_element(*LoginPageLocators.lp_email_input).send_keys(login)
         driver.find_element(*LoginPageLocators.lp_password_input).send_keys(password)
         driver.find_element(*LoginPageLocators.login_button).click()
 
-        wait_element_to_be_visible(HomePageLocators.place_an_order_button)
+        button = wait_element_to_be_visible(driver, HomePageLocators.place_an_order_button).text
 
-        assert driver.find_element(*HomePageLocators.place_an_order_button).text == 'Оформить заказ', \
-            "Авторизация не прошла"
+        assert button == 'Оформить заказ', "Авторизация не прошла"
 
 
     def test_registration_existing_user(
             self,
-            driver,
-            register_user,
-            wait_element_to_be_visible,
-            wait_element_to_be_clickable,
-            generate_login
+            driver
     ):
-        name = "Алена"
-        password = "123456"
-        login = generate_login()
-
-        # регистрация
-        register_user(name, login, password)
-
-        assert driver.current_url == 'https://stellarburgers.nomoreparties.site/login', "Регистрация не прошла"
-
         # попытка регистрации с существующим пользователем
         driver.get("https://stellarburgers.nomoreparties.site/register")
 
-        wait_element_to_be_visible(RegistrationPageLocators.rp_password_input)
+        wait_element_to_be_visible(driver, RegistrationPageLocators.rp_password_input)
 
-        driver.find_element(*RegistrationPageLocators.rp_name_input).send_keys(name)
-        driver.find_element(*RegistrationPageLocators.rp_email_input).send_keys(login)
-        driver.find_element(*RegistrationPageLocators.rp_password_input).send_keys(password)
+        driver.find_element(*RegistrationPageLocators.rp_name_input).send_keys(LoginData.name)
+        driver.find_element(*RegistrationPageLocators.rp_email_input).send_keys(LoginData.login)
+        driver.find_element(*RegistrationPageLocators.rp_password_input).send_keys(LoginData.password)
         driver.find_element(*RegistrationPageLocators.sign_up_button).click()
 
-        wait_element_to_be_visible(RegistrationPageLocators.error_message_existing_user)
-
-        error_message = driver.find_element(*RegistrationPageLocators.error_message_existing_user).text
+        error_message = wait_element_to_be_visible(driver, RegistrationPageLocators.error_message_existing_user).text
 
         assert ('/register' in driver.current_url and error_message == "Такой пользователь уже существует")
 
@@ -97,10 +100,6 @@ class TestRegistration:
     def test_registration_with_incorrect_password_failed(
             self,
             driver,
-            register_user,
-            wait_element_to_be_visible,
-            wait_element_to_be_clickable,
-            generate_login,
             name,
             password
     ):
@@ -109,15 +108,13 @@ class TestRegistration:
         # регистрация с некорректным паролем
         driver.get("https://stellarburgers.nomoreparties.site/register")
 
-        wait_element_to_be_visible(RegistrationPageLocators.rp_password_input)
+        wait_element_to_be_visible(driver, RegistrationPageLocators.rp_password_input)
 
         driver.find_element(*RegistrationPageLocators.rp_name_input).send_keys(name)
         driver.find_element(*RegistrationPageLocators.rp_email_input).send_keys(login)
         driver.find_element(*RegistrationPageLocators.rp_password_input).send_keys(password)
         driver.find_element(*RegistrationPageLocators.sign_up_button).click()
 
-        error_message = driver.find_element(*RegistrationPageLocators.error_message_incorrect_password).text
-
-        wait_element_to_be_visible(RegistrationPageLocators.error_message_incorrect_password)
+        error_message = wait_element_to_be_visible(driver, RegistrationPageLocators.error_message_incorrect_password).text
 
         assert error_message == "Некорректный пароль"
